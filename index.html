@@ -1,5 +1,5 @@
 # Kentucky 6th Congressional District Interactive Map Generator
-# VERSION: 4.0 - Real US Census Bureau Data Integration + UI Enhancements
+# VERSION: 4.1 - Real US Census Bureau Data Integration + UI Enhancements
 # Date: July 20, 2025
 
 import folium
@@ -10,192 +10,210 @@ import requests
 import time
 from typing import Dict, Any, Optional
 
+
 def load_shapefiles():
     """Load the Congressional District and County shapefiles"""
-    
+
     print("Loading shapefiles...")
-    
+
     # Load congressional districts - Kentucky only
     cd_gdf = gpd.read_file("cd_data/tl_2024_21_cd119.shp")
-    
+
     # Load all US counties
     counties_gdf = gpd.read_file("county_data/tl_2024_us_county.shp")
-    
+
     # Filter for Kentucky 6th District (CD119FP = '06')
-    ky6_district = cd_gdf[cd_gdf['CD119FP'] == '06'].copy()
-    
+    ky6_district = cd_gdf[cd_gdf["CD119FP"] == "06"].copy()
+
     if ky6_district.empty:
         raise ValueError("Kentucky 6th District not found!")
-    
+
     # Filter for Kentucky counties (STATEFP = '21')
-    ky_counties = counties_gdf[counties_gdf['STATEFP'] == '21'].copy()
-    
+    ky_counties = counties_gdf[counties_gdf["STATEFP"] == "21"].copy()
+
     print(f"Loaded Kentucky 6th District: {len(ky6_district)} feature")
     print(f"Loaded Kentucky counties: {len(ky_counties)} features")
-    
+
     return ky6_district, ky_counties
+
 
 def get_census_api_data() -> Dict[str, Dict[str, Any]]:
     """
     Fetch real demographic data from US Census Bureau API
     Using American Community Survey (ACS) 5-Year Estimates 2022 (latest available)
     """
-    
+
     print("Fetching real US Census data...")
-    
+
     # Kentucky county FIPS codes for the 6th district counties
     county_fips = {
-        'Anderson': '21005',
-        'Bath': '21011', 
-        'Bourbon': '21017',
-        'Clark': '21049',
-        'Estill': '21065',
-        'Fayette': '21067',
-        'Fleming': '21069',
-        'Garrard': '21079',
-        'Jessamine': '21113',
-        'Madison': '21151',
-        'Mercer': '21167',
-        'Montgomery': '21173',
-        'Nicholas': '21181',
-        'Powell': '21197',
-        'Scott': '21209',
-        'Woodford': '21239'
+        "Anderson": "21005",
+        "Bath": "21011",
+        "Bourbon": "21017",
+        "Clark": "21049",
+        "Estill": "21065",
+        "Fayette": "21067",
+        "Fleming": "21069",
+        "Garrard": "21079",
+        "Jessamine": "21113",
+        "Madison": "21151",
+        "Mercer": "21167",
+        "Montgomery": "21173",
+        "Nicholas": "21181",
+        "Powell": "21197",
+        "Scott": "21209",
+        "Woodford": "21239",
     }
-    
+
     # Census API variables (ACS 5-Year 2022)
     variables = {
-        'B01003_001E': 'total_population',           # Total Population
-        'B19013_001E': 'median_household_income',    # Median Household Income
-        'B25077_001E': 'median_home_value',          # Median Home Value
-        'B08303_001E': 'total_commuters',            # Total Commuters
-        'B08303_013E': 'commute_60_plus_mins',       # Commute 60+ minutes
-        'B15003_022E': 'bachelors_degree',           # Bachelor's Degree
-        'B15003_001E': 'total_education',            # Total Education Universe
-        'B08121_002E': 'drove_alone_to_work',        # Drove Alone to Work
-        'B25003_002E': 'owner_occupied_housing',     # Owner-Occupied Housing
-        'B25003_001E': 'total_housing_units',        # Total Housing Units
-        'C27001_004E': 'under_19_no_insurance',      # Under 19 No Health Insurance
-        'C27001_007E': 'age_19_34_no_insurance',     # Age 19-34 No Health Insurance  
-        'C27001_010E': 'age_35_64_no_insurance',     # Age 35-64 No Health Insurance
-        'C27001_001E': 'total_insurance_universe'    # Total Health Insurance Universe
+        "B01003_001E": "total_population",  # Total Population
+        "B19013_001E": "median_household_income",  # Median Household Income
+        "B25077_001E": "median_home_value",  # Median Home Value
+        "B08303_001E": "total_commuters",  # Total Commuters
+        "B08303_013E": "commute_60_plus_mins",  # Commute 60+ minutes
+        "B15003_022E": "bachelors_degree",  # Bachelor's Degree
+        "B15003_001E": "total_education",  # Total Education Universe
+        "B08121_002E": "drove_alone_to_work",  # Drove Alone to Work
+        "B25003_002E": "owner_occupied_housing",  # Owner-Occupied Housing
+        "B25003_001E": "total_housing_units",  # Total Housing Units
+        "C27001_004E": "under_19_no_insurance",  # Under 19 No Health Insurance
+        "C27001_007E": "age_19_34_no_insurance",  # Age 19-34 No Health Insurance
+        "C27001_010E": "age_35_64_no_insurance",  # Age 35-64 No Health Insurance
+        "C27001_001E": "total_insurance_universe",  # Total Health Insurance Universe
     }
-    
-    var_string = ','.join(variables.keys())
+
+    var_string = ",".join(variables.keys())
     demographics = {}
-    
+
     # Make API request for Kentucky counties
     try:
         api_url = f"https://api.census.gov/data/2022/acs/acs5"
         params = {
-            'get': var_string,
-            'for': 'county:*',
-            'in': 'state:21'  # Kentucky FIPS code
+            "get": var_string,
+            "for": "county:*",
+            "in": "state:21",  # Kentucky FIPS code
         }
-        
+
         print("Making Census API request...")
         response = requests.get(api_url, params=params, timeout=30)
         response.raise_for_status()
-        
+
         data = response.json()
         header = data[0]
         rows = data[1:]
-        
+
         print(f"Retrieved data for {len(rows)} Kentucky counties")
-        
+
         # Process each county
         for row in rows:
             county_data = dict(zip(header, row))
             county_fips_code = f"21{county_data['county']}"
-            
+
             # Find county name from our mapping
             county_name = None
             for name, fips in county_fips.items():
                 if fips == county_fips_code:
                     county_name = name
                     break
-            
+
             if not county_name:
                 continue
-                
+
             # Calculate derived metrics with error handling
             def safe_divide(numerator, denominator):
                 try:
-                    num = float(numerator) if numerator not in [None, '', '-'] else 0
-                    den = float(denominator) if denominator not in [None, '', '-'] else 0
+                    num = float(numerator) if numerator not in [None, "", "-"] else 0
+                    den = (
+                        float(denominator) if denominator not in [None, "", "-"] else 0
+                    )
                     return (num / den * 100) if den > 0 else 0
                 except (ValueError, TypeError):
                     return 0
-            
+
             def safe_int(value):
                 try:
-                    return int(float(value)) if value not in [None, '', '-'] else 0
+                    return int(float(value)) if value not in [None, "", "-"] else 0
                 except (ValueError, TypeError):
                     return 0
-            
+
             def safe_float(value):
                 try:
-                    return float(value) if value not in [None, '', '-'] else 0
+                    return float(value) if value not in [None, "", "-"] else 0
                 except (ValueError, TypeError):
                     return 0
-            
+
             # Extract and calculate metrics
-            population = safe_int(county_data.get('B01003_001E', 0))
-            median_income = safe_int(county_data.get('B19013_001E', 0))
-            median_home_value = safe_int(county_data.get('B25077_001E', 0))
-            
+            population = safe_int(county_data.get("B01003_001E", 0))
+            median_income = safe_int(county_data.get("B19013_001E", 0))
+            median_home_value = safe_int(county_data.get("B25077_001E", 0))
+
             # Education percentage
-            bachelors = safe_float(county_data.get('B15003_022E', 0))
-            total_education = safe_float(county_data.get('B15003_001E', 0))
+            bachelors = safe_float(county_data.get("B15003_022E", 0))
+            total_education = safe_float(county_data.get("B15003_001E", 0))
             education_pct = safe_divide(bachelors, total_education)
-            
-            # Long commute percentage  
-            long_commute = safe_float(county_data.get('B08303_013E', 0))
-            total_commuters = safe_float(county_data.get('B08303_001E', 0))
+
+            # Long commute percentage
+            long_commute = safe_float(county_data.get("B08303_013E", 0))
+            total_commuters = safe_float(county_data.get("B08303_001E", 0))
             long_commute_pct = safe_divide(long_commute, total_commuters)
-            
+
             # Homeownership rate
-            owner_occupied = safe_float(county_data.get('B25003_002E', 0))
-            total_housing = safe_float(county_data.get('B25003_001E', 0))
+            owner_occupied = safe_float(county_data.get("B25003_002E", 0))
+            total_housing = safe_float(county_data.get("B25003_001E", 0))
             homeownership_pct = safe_divide(owner_occupied, total_housing)
-            
+
             # Uninsured rate calculation
-            uninsured_under_19 = safe_float(county_data.get('C27001_004E', 0))
-            uninsured_19_34 = safe_float(county_data.get('C27001_007E', 0))
-            uninsured_35_64 = safe_float(county_data.get('C27001_010E', 0))
-            total_insurance_universe = safe_float(county_data.get('C27001_001E', 0))
-            
+            uninsured_under_19 = safe_float(county_data.get("C27001_004E", 0))
+            uninsured_19_34 = safe_float(county_data.get("C27001_007E", 0))
+            uninsured_35_64 = safe_float(county_data.get("C27001_010E", 0))
+            total_insurance_universe = safe_float(county_data.get("C27001_001E", 0))
+
             total_uninsured = uninsured_under_19 + uninsured_19_34 + uninsured_35_64
             uninsured_pct = safe_divide(total_uninsured, total_insurance_universe)
-            
+
             demographics[county_name] = {
-                'population': population,
-                'median_income': median_income,
-                'median_home_value': median_home_value,
-                'education_pct': round(education_pct, 1),
-                'long_commute_pct': round(long_commute_pct, 1),
-                'homeownership_pct': round(homeownership_pct, 1),
-                'uninsured_pct': round(uninsured_pct, 1),
-                'data_source': 'US Census Bureau ACS 2022',
-                'data_vintage': '2022 5-Year Estimates'
+                "population": population,
+                "median_income": median_income,
+                "median_home_value": median_home_value,
+                "education_pct": round(education_pct, 1),
+                "long_commute_pct": round(long_commute_pct, 1),
+                "homeownership_pct": round(homeownership_pct, 1),
+                "uninsured_pct": round(uninsured_pct, 1),
+                "data_source": "US Census Bureau ACS 2022",
+                "data_vintage": "2022 5-Year Estimates",
             }
-            
+
         print(f"Processed Census data for {len(demographics)} district counties")
-        
+
         # Add growth estimates (since Census doesn't provide real-time growth)
         # Using recent Kentucky state growth trends as estimates
         growth_estimates = {
-            'Fayette': '+1.8%', 'Scott': '+2.3%', 'Jessamine': '+2.7%', 'Woodford': '+2.1%',
-            'Anderson': '+1.4%', 'Madison': '+1.5%', 'Mercer': '+1.1%', 'Bourbon': '+0.8%',
-            'Clark': '+1.2%', 'Garrard': '+0.5%', 'Montgomery': '+0.9%', 'Powell': '-0.8%',
-            'Fleming': '-0.3%', 'Estill': '-1.2%', 'Nicholas': '-0.6%', 'Bath': '-0.9%'
+            "Fayette": "+1.8%",
+            "Scott": "+2.3%",
+            "Jessamine": "+2.7%",
+            "Woodford": "+2.1%",
+            "Anderson": "+1.4%",
+            "Madison": "+1.5%",
+            "Mercer": "+1.1%",
+            "Bourbon": "+0.8%",
+            "Clark": "+1.2%",
+            "Garrard": "+0.5%",
+            "Montgomery": "+0.9%",
+            "Powell": "-0.8%",
+            "Fleming": "-0.3%",
+            "Estill": "-1.2%",
+            "Nicholas": "-0.6%",
+            "Bath": "-0.9%",
         }
-        
+
         for county_name in demographics:
-            demographics[county_name]['growth_estimate'] = growth_estimates.get(county_name, '0.0%')
-        
+            demographics[county_name]["growth_estimate"] = growth_estimates.get(
+                county_name, "0.0%"
+            )
+
         return demographics
-        
+
     except requests.exceptions.RequestException as e:
         print(f"Census API request failed: {e}")
         print("Falling back to cached demographic data...")
@@ -205,113 +223,211 @@ def get_census_api_data() -> Dict[str, Dict[str, Any]]:
         print("Falling back to cached demographic data...")
         return get_fallback_demographics()
 
+
 def get_fallback_demographics() -> Dict[str, Dict[str, Any]]:
     """Fallback demographic data in case Census API is unavailable"""
-    
+
     print("Using fallback demographic data...")
-    
+
     return {
-        'Scott': {
-            'population': 57155, 'median_income': 65420, 'median_home_value': 185000,
-            'education_pct': 23.5, 'long_commute_pct': 35.2, 'homeownership_pct': 78.9,
-            'uninsured_pct': 8.2, 'growth_estimate': '+2.3%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Scott": {
+            "population": 57155,
+            "median_income": 65420,
+            "median_home_value": 185000,
+            "education_pct": 23.5,
+            "long_commute_pct": 35.2,
+            "homeownership_pct": 78.9,
+            "uninsured_pct": 8.2,
+            "growth_estimate": "+2.3%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Powell': {
-            'population': 13129, 'median_income': 42890, 'median_home_value': 125000,
-            'education_pct': 15.8, 'long_commute_pct': 42.1, 'homeownership_pct': 82.3,
-            'uninsured_pct': 12.7, 'growth_estimate': '-0.8%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Powell": {
+            "population": 13129,
+            "median_income": 42890,
+            "median_home_value": 125000,
+            "education_pct": 15.8,
+            "long_commute_pct": 42.1,
+            "homeownership_pct": 82.3,
+            "uninsured_pct": 12.7,
+            "growth_estimate": "-0.8%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Clark': {
-            'population': 36972, 'median_income': 52100, 'median_home_value': 148000,
-            'education_pct': 19.4, 'long_commute_pct': 28.7, 'homeownership_pct': 75.6,
-            'uninsured_pct': 9.8, 'growth_estimate': '+1.2%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Clark": {
+            "population": 36972,
+            "median_income": 52100,
+            "median_home_value": 148000,
+            "education_pct": 19.4,
+            "long_commute_pct": 28.7,
+            "homeownership_pct": 75.6,
+            "uninsured_pct": 9.8,
+            "growth_estimate": "+1.2%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Garrard': {
-            'population': 16953, 'median_income': 48750, 'median_home_value': 135000,
-            'education_pct': 17.2, 'long_commute_pct': 38.5, 'homeownership_pct': 80.1,
-            'uninsured_pct': 11.3, 'growth_estimate': '+0.5%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Garrard": {
+            "population": 16953,
+            "median_income": 48750,
+            "median_home_value": 135000,
+            "education_pct": 17.2,
+            "long_commute_pct": 38.5,
+            "homeownership_pct": 80.1,
+            "uninsured_pct": 11.3,
+            "growth_estimate": "+0.5%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Montgomery': {
-            'population': 28114, 'median_income': 44200, 'median_home_value': 128000,
-            'education_pct': 16.9, 'long_commute_pct': 31.8, 'homeownership_pct': 72.4,
-            'uninsured_pct': 10.9, 'growth_estimate': '+0.9%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Montgomery": {
+            "population": 28114,
+            "median_income": 44200,
+            "median_home_value": 128000,
+            "education_pct": 16.9,
+            "long_commute_pct": 31.8,
+            "homeownership_pct": 72.4,
+            "uninsured_pct": 10.9,
+            "growth_estimate": "+0.9%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Fayette': {
-            'population': 322570, 'median_income': 59230, 'median_home_value': 175000,
-            'education_pct': 45.2, 'long_commute_pct': 18.3, 'homeownership_pct': 58.7,
-            'uninsured_pct': 7.1, 'growth_estimate': '+1.8%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Fayette": {
+            "population": 322570,
+            "median_income": 59230,
+            "median_home_value": 175000,
+            "education_pct": 45.2,
+            "long_commute_pct": 18.3,
+            "homeownership_pct": 58.7,
+            "uninsured_pct": 7.1,
+            "growth_estimate": "+1.8%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Woodford': {
-            'population': 26871, 'median_income': 72150, 'median_home_value': 220000,
-            'education_pct': 31.4, 'long_commute_pct': 25.9, 'homeownership_pct': 82.6,
-            'uninsured_pct': 6.8, 'growth_estimate': '+2.1%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Woodford": {
+            "population": 26871,
+            "median_income": 72150,
+            "median_home_value": 220000,
+            "education_pct": 31.4,
+            "long_commute_pct": 25.9,
+            "homeownership_pct": 82.6,
+            "uninsured_pct": 6.8,
+            "growth_estimate": "+2.1%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Fleming': {
-            'population': 14348, 'median_income': 43680, 'median_home_value': 118000,
-            'education_pct': 14.7, 'long_commute_pct': 39.6, 'homeownership_pct': 78.9,
-            'uninsured_pct': 13.2, 'growth_estimate': '-0.3%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Fleming": {
+            "population": 14348,
+            "median_income": 43680,
+            "median_home_value": 118000,
+            "education_pct": 14.7,
+            "long_commute_pct": 39.6,
+            "homeownership_pct": 78.9,
+            "uninsured_pct": 13.2,
+            "growth_estimate": "-0.3%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Estill': {
-            'population': 14163, 'median_income': 35890, 'median_home_value': 95000,
-            'education_pct': 12.3, 'long_commute_pct': 45.2, 'homeownership_pct': 76.8,
-            'uninsured_pct': 15.8, 'growth_estimate': '-1.2%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Estill": {
+            "population": 14163,
+            "median_income": 35890,
+            "median_home_value": 95000,
+            "education_pct": 12.3,
+            "long_commute_pct": 45.2,
+            "homeownership_pct": 76.8,
+            "uninsured_pct": 15.8,
+            "growth_estimate": "-1.2%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Jessamine': {
-            'population': 52991, 'median_income': 64280, 'median_home_value': 188000,
-            'education_pct': 28.6, 'long_commute_pct': 32.1, 'homeownership_pct': 79.3,
-            'uninsured_pct': 7.9, 'growth_estimate': '+2.7%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Jessamine": {
+            "population": 52991,
+            "median_income": 64280,
+            "median_home_value": 188000,
+            "education_pct": 28.6,
+            "long_commute_pct": 32.1,
+            "homeownership_pct": 79.3,
+            "uninsured_pct": 7.9,
+            "growth_estimate": "+2.7%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Nicholas': {
-            'population': 7537, 'median_income': 41200, 'median_home_value': 108000,
-            'education_pct': 13.8, 'long_commute_pct': 41.7, 'homeownership_pct': 81.2,
-            'uninsured_pct': 14.5, 'growth_estimate': '-0.6%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Nicholas": {
+            "population": 7537,
+            "median_income": 41200,
+            "median_home_value": 108000,
+            "education_pct": 13.8,
+            "long_commute_pct": 41.7,
+            "homeownership_pct": 81.2,
+            "uninsured_pct": 14.5,
+            "growth_estimate": "-0.6%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Bourbon': {
-            'population': 20252, 'median_income': 54300, 'median_home_value': 158000,
-            'education_pct': 20.1, 'long_commute_pct': 29.4, 'homeownership_pct': 77.5,
-            'uninsured_pct': 9.6, 'growth_estimate': '+0.8%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Bourbon": {
+            "population": 20252,
+            "median_income": 54300,
+            "median_home_value": 158000,
+            "education_pct": 20.1,
+            "long_commute_pct": 29.4,
+            "homeownership_pct": 77.5,
+            "uninsured_pct": 9.6,
+            "growth_estimate": "+0.8%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Madison': {
-            'population': 92701, 'median_income': 47650, 'median_home_value': 142000,
-            'education_pct': 26.8, 'long_commute_pct': 24.6, 'homeownership_pct': 64.2,
-            'uninsured_pct': 9.1, 'growth_estimate': '+1.5%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Madison": {
+            "population": 92701,
+            "median_income": 47650,
+            "median_home_value": 142000,
+            "education_pct": 26.8,
+            "long_commute_pct": 24.6,
+            "homeownership_pct": 64.2,
+            "uninsured_pct": 9.1,
+            "growth_estimate": "+1.5%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Mercer': {
-            'population': 22641, 'median_income': 53420, 'median_home_value': 152000,
-            'education_pct': 18.9, 'long_commute_pct': 33.8, 'homeownership_pct': 76.4,
-            'uninsured_pct': 8.7, 'growth_estimate': '+1.1%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Mercer": {
+            "population": 22641,
+            "median_income": 53420,
+            "median_home_value": 152000,
+            "education_pct": 18.9,
+            "long_commute_pct": 33.8,
+            "homeownership_pct": 76.4,
+            "uninsured_pct": 8.7,
+            "growth_estimate": "+1.1%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Anderson': {
-            'population': 22575, 'median_income': 58900, 'median_home_value': 168000,
-            'education_pct': 21.7, 'long_commute_pct': 36.9, 'homeownership_pct': 80.8,
-            'uninsured_pct': 8.4, 'growth_estimate': '+1.4%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
+        "Anderson": {
+            "population": 22575,
+            "median_income": 58900,
+            "median_home_value": 168000,
+            "education_pct": 21.7,
+            "long_commute_pct": 36.9,
+            "homeownership_pct": 80.8,
+            "uninsured_pct": 8.4,
+            "growth_estimate": "+1.4%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
         },
-        'Bath': {
-            'population': 12750, 'median_income': 38200, 'median_home_value': 105000,
-            'education_pct': 13.2, 'long_commute_pct': 43.8, 'homeownership_pct': 79.6,
-            'uninsured_pct': 16.2, 'growth_estimate': '-0.9%',
-            'data_source': 'Estimated (Census API unavailable)', 'data_vintage': '2022 Est'
-        }
+        "Bath": {
+            "population": 12750,
+            "median_income": 38200,
+            "median_home_value": 105000,
+            "education_pct": 13.2,
+            "long_commute_pct": 43.8,
+            "homeownership_pct": 79.6,
+            "uninsured_pct": 16.2,
+            "growth_estimate": "-0.9%",
+            "data_source": "Estimated (Census API unavailable)",
+            "data_vintage": "2022 Est",
+        },
     }
+
 
 def get_hospital_data():
     """Get corrected hospital data for the 6 district hospitals"""
-    
+
     # District hospitals (6) - corrected data
     district_hospitals = [
         {
@@ -323,10 +439,15 @@ def get_hospital_data():
             "risk_description": "Rural acute care hospital with high Medicaid patient load and negative operating margins; at risk of closure due to Medicaid cuts",
             "beds": 58,
             "services": [
-                "Emergency", "Maternity", "Surgery", "Cardiology", "Imaging", "Rehabilitation"
+                "Emergency",
+                "Maternity",
+                "Surgery",
+                "Cardiology",
+                "Imaging",
+                "Rehabilitation",
             ],
             "closure_timeline": "Unknown",
-            "additional_info": "Major employer in Bourbon County; closure would force patients to travel to Lexington for care"
+            "additional_info": "Major employer in Bourbon County; closure would force patients to travel to Lexington for care",
         },
         {
             "hospital_name": "Clark Regional Medical Center",
@@ -337,10 +458,15 @@ def get_hospital_data():
             "risk_description": "Serves Clark County with a high Medicaid population; at risk due to thin operating margins and policy changes",
             "beds": 79,
             "services": [
-                "Emergency", "Surgery", "Cardiology", "Orthopedics", "Rehabilitation", "Imaging"
+                "Emergency",
+                "Surgery",
+                "Cardiology",
+                "Orthopedics",
+                "Rehabilitation",
+                "Imaging",
             ],
             "closure_timeline": "Unknown",
-            "additional_info": "Key healthcare provider for Winchester and surrounding rural areas"
+            "additional_info": "Key healthcare provider for Winchester and surrounding rural areas",
         },
         {
             "hospital_name": "Saint Joseph Mount Sterling",
@@ -351,10 +477,15 @@ def get_hospital_data():
             "risk_description": "Regional referral center with high Medicaid share; at risk due to financial pressures and Medicaid funding threats",
             "beds": 42,
             "services": [
-                "Emergency", "Surgery", "Cardiology", "Orthopedics", "Women's Health", "Rehabilitation"
+                "Emergency",
+                "Surgery",
+                "Cardiology",
+                "Orthopedics",
+                "Women's Health",
+                "Rehabilitation",
             ],
             "closure_timeline": "Unknown",
-            "additional_info": "Serves multiple counties in eastern Kentucky; closure would impact regional access"
+            "additional_info": "Serves multiple counties in eastern Kentucky; closure would impact regional access",
         },
         {
             "hospital_name": "Saint Joseph Berea",
@@ -365,10 +496,15 @@ def get_hospital_data():
             "risk_description": "Rural hospital with high Medicaid population and negative margins; at risk due to Medicaid funding changes",
             "beds": 25,
             "services": [
-                "Emergency", "Primary Care", "Surgery", "Rehabilitation", "Imaging", "Women's Health"
+                "Emergency",
+                "Primary Care",
+                "Surgery",
+                "Rehabilitation",
+                "Imaging",
+                "Women's Health",
             ],
             "closure_timeline": "Unknown",
-            "additional_info": "Primary healthcare provider for Berea and surrounding rural communities"
+            "additional_info": "Primary healthcare provider for Berea and surrounding rural communities",
         },
         {
             "hospital_name": "Mercy Health – Marcum & Wallace Memorial Hospital",
@@ -379,10 +515,14 @@ def get_hospital_data():
             "risk_description": "Only hospital in Estill County; at risk due to high Medicaid dependency and negative margins",
             "beds": 25,
             "services": [
-                "Emergency", "Primary Care", "Surgery", "Rehabilitation", "Imaging"
+                "Emergency",
+                "Primary Care",
+                "Surgery",
+                "Rehabilitation",
+                "Imaging",
             ],
             "closure_timeline": "Unknown",
-            "additional_info": "Critical access hospital serving rural communities; closure would create a healthcare desert"
+            "additional_info": "Critical access hospital serving rural communities; closure would create a healthcare desert",
         },
         {
             "hospital_name": "Fleming County Hospital",
@@ -392,172 +532,186 @@ def get_hospital_data():
             "risk_level": "high",
             "risk_description": "Critical access hospital with high Medicaid population; at risk due to policy and funding changes",
             "beds": 25,
-            "services": [
-                "Emergency", "Primary Care", "Surgery", "Rehabilitation"
-            ],
+            "services": ["Emergency", "Primary Care", "Surgery", "Rehabilitation"],
             "closure_timeline": "Unknown",
-            "additional_info": "Serves Fleming and surrounding counties; only hospital in the county"
-        }
+            "additional_info": "Serves Fleming and surrounding counties; only hospital in the county",
+        },
     ]
-    
+
     return district_hospitals
+
 
 def identify_district_counties(district_gdf, counties_gdf):
     """Identify counties within the district and prepare extended grey coverage"""
-    
+
     print("Processing district counties...")
-    
+
     district_geom = district_gdf.geometry.iloc[0]
     demographics = get_census_api_data()  # Now uses real Census data
-    
+
     # Based on actual data analysis - 14 full counties
     full_county_names = [
-        'Scott', 'Powell', 'Clark', 'Garrard', 'Montgomery', 'Fayette', 
-        'Woodford', 'Fleming', 'Estill', 'Jessamine', 'Nicholas', 
-        'Bourbon', 'Madison', 'Mercer'
+        "Scott",
+        "Powell",
+        "Clark",
+        "Garrard",
+        "Montgomery",
+        "Fayette",
+        "Woodford",
+        "Fleming",
+        "Estill",
+        "Jessamine",
+        "Nicholas",
+        "Bourbon",
+        "Madison",
+        "Mercer",
     ]
-    
+
     # ONLY significant partial counties (>40% overlap) - exclude 0.0% counties
-    significant_partial_names = ['Anderson', 'Bath']
-    
+    significant_partial_names = ["Anderson", "Bath"]
+
     full_counties = []
     partial_counties = []
     outside_counties = []
     partial_outside_areas = []
-    
+
     # Process full counties
     for county_name in full_county_names:
-        county_row = counties_gdf[counties_gdf['NAME'] == county_name]
+        county_row = counties_gdf[counties_gdf["NAME"] == county_name]
         if not county_row.empty:
             county = county_row.iloc[0]
             centroid = county.geometry.centroid
             demo_data = demographics.get(county_name, {})
-            
+
             county_info = {
-                'name': county['NAME'],
-                'geoid': county['GEOID'],
-                'geometry': county.geometry,
-                'intersection_geometry': county.geometry,
-                'overlap_percentage': 100.0,
-                'centroid': centroid,
-                'label_lat': centroid.y,
-                'label_lon': centroid.x,
-                'demographics': demo_data
+                "name": county["NAME"],
+                "geoid": county["GEOID"],
+                "geometry": county.geometry,
+                "intersection_geometry": county.geometry,
+                "overlap_percentage": 100.0,
+                "centroid": centroid,
+                "label_lat": centroid.y,
+                "label_lon": centroid.x,
+                "demographics": demo_data,
             }
             full_counties.append(county_info)
-    
+
     # Process significant partial counties
     for county_name in significant_partial_names:
-        county_row = counties_gdf[counties_gdf['NAME'] == county_name]
+        county_row = counties_gdf[counties_gdf["NAME"] == county_name]
         if not county_row.empty:
             county = county_row.iloc[0]
             intersection = county.geometry.intersection(district_geom)
-            
+
             if not intersection.is_empty:
                 # Validate and clean geometry for Bath County specifically
-                if county_name == 'Bath':
-                    if intersection.geom_type == 'MultiPolygon':
+                if county_name == "Bath":
+                    if intersection.geom_type == "MultiPolygon":
                         largest_geom = max(intersection.geoms, key=lambda g: g.area)
                         intersection = largest_geom
-                        print(f"WARNING: Bath County had multiple geometry parts, using largest")
+                        print(
+                            f"WARNING: Bath County had multiple geometry parts, using largest"
+                        )
                     intersection = intersection.buffer(0)
-                
+
                 overlap_pct = (intersection.area / county.geometry.area) * 100
                 intersection_centroid = intersection.centroid
                 demo_data = demographics.get(county_name, {})
-                
+
                 county_info = {
-                    'name': county['NAME'],
-                    'geoid': county['GEOID'],
-                    'geometry': county.geometry,
-                    'intersection_geometry': intersection,
-                    'overlap_percentage': overlap_pct,
-                    'centroid': intersection_centroid,
-                    'label_lat': intersection_centroid.y,
-                    'label_lon': intersection_centroid.x,
-                    'demographics': demo_data
+                    "name": county["NAME"],
+                    "geoid": county["GEOID"],
+                    "geometry": county.geometry,
+                    "intersection_geometry": intersection,
+                    "overlap_percentage": overlap_pct,
+                    "centroid": intersection_centroid,
+                    "label_lat": intersection_centroid.y,
+                    "label_lon": intersection_centroid.x,
+                    "demographics": demo_data,
                 }
                 partial_counties.append(county_info)
-                
+
                 # Add the part OUTSIDE the district to be greyed out
                 outside_part = county.geometry.difference(intersection)
                 if not outside_part.is_empty:
                     partial_outside_info = {
-                        'name': county['NAME'] + ' (outside)',
-                        'geoid': county['GEOID'],
-                        'geometry': outside_part,
-                        'overlap_percentage': 0.0,
-                        'demographics': {}
+                        "name": county["NAME"] + " (outside)",
+                        "geoid": county["GEOID"],
+                        "geometry": outside_part,
+                        "overlap_percentage": 0.0,
+                        "demographics": {},
                     }
                     partial_outside_areas.append(partial_outside_info)
-    
+
     # Process all Kentucky counties for extended grey coverage
-    all_ky_counties = counties_gdf[counties_gdf['STATEFP'] == '21']
+    all_ky_counties = counties_gdf[counties_gdf["STATEFP"] == "21"]
     for _, county in all_ky_counties.iterrows():
-        county_name = county['NAME']
-        
+        county_name = county["NAME"]
+
         if county_name in full_county_names or county_name in significant_partial_names:
             continue
-            
+
         centroid = county.geometry.centroid
         county_info = {
-            'name': county['NAME'],
-            'geoid': county['GEOID'],
-            'geometry': county.geometry,
-            'overlap_percentage': 0.0,
-            'centroid': centroid,
-            'label_lat': centroid.y,
-            'label_lon': centroid.x,
-            'demographics': {}
+            "name": county["NAME"],
+            "geoid": county["GEOID"],
+            "geometry": county.geometry,
+            "overlap_percentage": 0.0,
+            "centroid": centroid,
+            "label_lat": centroid.y,
+            "label_lon": centroid.x,
+            "demographics": {},
         }
         outside_counties.append(county_info)
-    
+
     print(f"Processed {len(full_counties)} full counties")
     print(f"Processed {len(partial_counties)} significant partial counties")
     print(f"Processed {len(partial_outside_areas)} partial county outside areas")
     print(f"Processed {len(outside_counties)} outside counties for grey coverage")
-    
+
     return full_counties, partial_counties, outside_counties, partial_outside_areas
+
 
 def create_base_map(district_gdf):
     """Create the base map with ONLY OpenStreetMap"""
-    
+
     # Calculate center from district bounds
     bounds = district_gdf.bounds.iloc[0]
-    center_lat = (bounds['miny'] + bounds['maxy']) / 2
-    center_lon = (bounds['minx'] + bounds['maxx']) / 2
-    
+    center_lat = (bounds["miny"] + bounds["maxy"]) / 2
+    center_lon = (bounds["minx"] + bounds["maxx"]) / 2
+
     # Create map with ONLY OpenStreetMap - no external tiles
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=10.5,
-        tiles='OpenStreetMap',
+        tiles="OpenStreetMap",
         prefer_canvas=True,
-        width='100%',
-        height='700px',
+        width="100%",
+        height="700px",
         zoom_control=True,
         scrollWheelZoom=True,
         doubleClickZoom=True,
-        dragging=True
+        dragging=True,
     )
-    
+
     return m, bounds
+
 
 def add_enhanced_district_boundary(map_obj, district_gdf):
     """Add the district boundary with modern gradient styling"""
-    
+
     # Enhanced district styling
     district_style = {
-        'fillColor': '#3B82F6',
-        'color': '#1E40AF',
-        'weight': 4,
-        'fillOpacity': 0.15,
-        'opacity': 1,
-        'dashArray': None
+        "fillColor": "#3B82F6",
+        "color": "#1E40AF",
+        "weight": 4,
+        "fillOpacity": 0.15,
+        "opacity": 1,
+        "dashArray": None,
     }
-    
+
     # Create enhanced popup content
-    popup_html = '''
+    popup_html = """
     <div style="font-family: 'Segoe UI', sans-serif; padding: 15px; min-width: 250px;">
         <div style="background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%); 
                     color: white; padding: 12px; margin: -15px -15px 15px -15px; 
@@ -578,134 +732,122 @@ def add_enhanced_district_boundary(map_obj, district_gdf):
             </p>
         </div>
     </div>
-    '''
-    
+    """
+
     # Add district boundary
     folium.GeoJson(
         district_gdf.iloc[0].geometry,
         style_function=lambda feature: district_style,
         popup=folium.Popup(popup_html, max_width=300),
         tooltip=folium.Tooltip(
-            'Kentucky 6th Congressional District<br>Click for details',
-            style='background: rgba(59, 130, 246, 0.9); color: white; border: none; border-radius: 6px; padding: 8px 12px; font-size: 13px;'
-        )
+            "Kentucky 6th Congressional District<br>Click for details",
+            style="background: rgba(59, 130, 246, 0.9); color: white; border: none; border-radius: 6px; padding: 8px 12px; font-size: 13px;",
+        ),
     ).add_to(map_obj)
 
-def add_enhanced_county_layers(map_obj, full_counties, partial_counties, outside_counties, partial_outside_areas):
+
+def add_enhanced_county_layers(
+    map_obj, full_counties, partial_counties, outside_counties, partial_outside_areas
+):
     """Add county boundaries with enhanced modern styling and real Census demographic data"""
-    
+
     # Enhanced color scheme
     def get_inside_county_style():
         return {
-            'fillColor': 'transparent',
-            'color': '#6B7280',
-            'weight': 2,
-            'fillOpacity': 0,
-            'opacity': 0.6
+            "fillColor": "transparent",
+            "color": "#6B7280",
+            "weight": 2,
+            "fillOpacity": 0,
+            "opacity": 0.6,
         }
-    
+
     def get_partial_county_style():
         return {
-            'fillColor': '#FEF3C7',
-            'color': '#F59E0B',
-            'weight': 2,
-            'fillOpacity': 0.25,
-            'opacity': 0.8,
-            'dashArray': '8, 4'
+            "fillColor": "#FEF3C7",
+            "color": "#F59E0B",
+            "weight": 2,
+            "fillOpacity": 0.25,
+            "opacity": 0.8,
+            "dashArray": "8, 4",
         }
-    
+
     def get_outside_county_style():
         return {
-            'fillColor': '#9CA3AF',
-            'color': '#6B7280',
-            'weight': 1,
-            'fillOpacity': 0.6,
-            'opacity': 0.7
+            "fillColor": "#9CA3AF",
+            "color": "#6B7280",
+            "weight": 1,
+            "fillOpacity": 0.6,
+            "opacity": 0.7,
         }
-    
-    # Enhanced hover styles
+
+    # Enhanced hover styles - ONLY for district counties
     def get_inside_hover_style():
         return {
-            'fillColor': '#EBF8FF',
-            'color': '#3B82F6',
-            'weight': 3,
-            'fillOpacity': 0.3,
-            'opacity': 1
+            "fillColor": "#EBF8FF",
+            "color": "#3B82F6",
+            "weight": 3,
+            "fillOpacity": 0.3,
+            "opacity": 1,
         }
-    
+
     def get_partial_hover_style():
         return {
-            'fillColor': '#FEF3C7',
-            'color': '#D97706',
-            'weight': 3,
-            'fillOpacity': 0.4,
-            'opacity': 1,
-            'dashArray': '8, 4'
+            "fillColor": "#FEF3C7",
+            "color": "#D97706",
+            "weight": 3,
+            "fillOpacity": 0.4,
+            "opacity": 1,
+            "dashArray": "8, 4",
         }
-    
-    def get_outside_hover_style():
-        return {
-            'fillColor': '#6B7280',
-            'color': '#374151',
-            'weight': 2,
-            'fillOpacity': 0.8,
-            'opacity': 1
-        }
-    
+
+    # NO hover style function for outside counties - they should remain static
+
     def create_enhanced_tooltip(county_info, is_partial=False):
-        """Create enhanced tooltip with real Census demographic data"""
-        
-        demographics = county_info.get('demographics', {})
-        
+        """Create enhanced tooltip with real Census demographic data - ONLY for district counties"""
+
+        demographics = county_info.get("demographics", {})
+
         if demographics:
-            tooltip_html = f'''
+            tooltip_html = f"""
             <div style="font-family: 'Segoe UI', sans-serif; min-width: 220px;">
                 <div style="font-weight: 600; color: #1F2937; margin-bottom: 8px; font-size: 14px;">
-                    {county_info['name']} County
+                    {county_info["name"]} County
                 </div>
                 <div style="color: #6B7280; font-size: 12px; line-height: 1.4;">
-                    <div>Population: {demographics.get('population', 'N/A'):,}</div>
-                    <div>Median Income: ${demographics.get('median_income', 'N/A'):,}</div>
-                    <div>Growth: {demographics.get('growth_estimate', 'N/A')}</div>
-                    <div>Uninsured: {demographics.get('uninsured_pct', 'N/A')}%</div>
+                    <div>Population: {demographics.get("population", "N/A"):,}</div>
+                    <div>Median Income: ${demographics.get("median_income", "N/A"):,}</div>
+                    <div>Growth: {demographics.get("growth_estimate", "N/A")}</div>
+                    <div>Uninsured: {demographics.get("uninsured_pct", "N/A")}%</div>
                     {f"<div style='margin-top: 4px; color: #F59E0B;'>Partial County ({county_info.get('overlap_percentage', 0):.1f}%)</div>" if is_partial else ""}
                 </div>
             </div>
-            '''
+            """
+
+            return folium.Tooltip(
+                tooltip_html,
+                style="background: rgba(255, 255, 255, 0.95); border: none; border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);",
+            )
         else:
-            tooltip_html = f'''
-            <div style="font-family: 'Segoe UI', sans-serif;">
-                <div style="font-weight: 600; color: #1F2937; font-size: 14px;">
-                    {county_info['name']} County
-                </div>
-                <div style="color: #6B7280; font-size: 12px; margin-top: 4px;">
-                    Outside District
-                </div>
-            </div>
-            '''
-        
-        return folium.Tooltip(
-            tooltip_html,
-            style='background: rgba(255, 255, 255, 0.95); border: none; border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);'
-        )
-    
+            # Return None for counties outside the district (no tooltip)
+            return None
+
     def create_enhanced_popup(county_info, is_partial=False):
-        """Create enhanced popup with detailed real Census demographic information"""
-        
-        demographics = county_info.get('demographics', {})
-        
+        """Create enhanced popup with detailed real Census demographic information - ONLY for district counties"""
+
+        demographics = county_info.get("demographics", {})
+
         if demographics:
             # Data source badge
-            data_source = demographics.get('data_source', 'US Census Bureau')
-            data_vintage = demographics.get('data_vintage', '2022')
-            
-            popup_html = f'''
+            data_source = demographics.get("data_source", "US Census Bureau")
+            data_vintage = demographics.get("data_vintage", "2022")
+
+            popup_html = f"""
             <div style="font-family: 'Segoe UI', sans-serif; padding: 15px; min-width: 320px;">
                 <div style="background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%); 
                             color: white; padding: 12px; margin: -15px -15px 15px -15px; 
                             border-radius: 8px 8px 0 0;">
                     <h3 style="margin: 0; font-size: 16px; font-weight: 600;">
-                        {county_info['name']} County
+                        {county_info["name"]} County
                     </h3>
                     {f"<div style='font-size: 12px; margin-top: 4px; opacity: 0.9;'>Partial County - {county_info.get('overlap_percentage', 0):.1f}% in District</div>" if is_partial else ""}
                 </div>
@@ -720,12 +862,12 @@ def add_enhanced_county_layers(map_obj, full_counties, partial_counties, outside
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Population</div>
-                            <div>{demographics.get('population', 'N/A'):,}</div>
+                            <div>{demographics.get("population", "N/A"):,}</div>
                         </div>
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Growth Est.</div>
-                            <div style="color: {'#059669' if demographics.get('growth_estimate', '').startswith('+') else '#DC2626' if demographics.get('growth_estimate', '').startswith('-') else '#6B7280'};">
-                                {demographics.get('growth_estimate', 'N/A')}
+                            <div style="color: {"#059669" if demographics.get("growth_estimate", "").startswith("+") else "#DC2626" if demographics.get("growth_estimate", "").startswith("-") else "#6B7280"};">
+                                {demographics.get("growth_estimate", "N/A")}
                             </div>
                         </div>
                     </div>
@@ -733,142 +875,148 @@ def add_enhanced_county_layers(map_obj, full_counties, partial_counties, outside
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Median Income</div>
-                            <div style="color: #059669;">${demographics.get('median_income', 'N/A'):,}</div>
+                            <div style="color: #059669;">${demographics.get("median_income", "N/A"):,}</div>
                         </div>
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Home Value</div>
-                            <div style="color: #059669;">${demographics.get('median_home_value', 'N/A'):,}</div>
+                            <div style="color: #059669;">${demographics.get("median_home_value", "N/A"):,}</div>
                         </div>
                     </div>
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Bachelor's+</div>
-                            <div>{demographics.get('education_pct', 'N/A')}%</div>
+                            <div>{demographics.get("education_pct", "N/A")}%</div>
                         </div>
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Homeownership</div>
-                            <div>{demographics.get('homeownership_pct', 'N/A')}%</div>
+                            <div>{demographics.get("homeownership_pct", "N/A")}%</div>
                         </div>
                     </div>
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Long Commute</div>
-                            <div style="color: {'#DC2626' if demographics.get('long_commute_pct', 0) > 35 else '#059669'};">
-                                {demographics.get('long_commute_pct', 'N/A')}%
+                            <div style="color: {"#DC2626" if demographics.get("long_commute_pct", 0) > 35 else "#059669"};">
+                                {demographics.get("long_commute_pct", "N/A")}%
                             </div>
                         </div>
                         <div>
                             <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px;">Uninsured</div>
-                            <div style="color: {'#DC2626' if demographics.get('uninsured_pct', 0) > 10 else '#059669'};">
-                                {demographics.get('uninsured_pct', 'N/A')}%
+                            <div style="color: {"#DC2626" if demographics.get("uninsured_pct", 0) > 10 else "#059669"};">
+                                {demographics.get("uninsured_pct", "N/A")}%
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            '''
-            
+            """
+
             return folium.Popup(popup_html, max_width=360)
         else:
             # Return None for counties outside the district (no popup)
             return None
-    
+
     # Add full counties with enhanced styling and real demographic data
     for county in full_counties:
         popup = create_enhanced_popup(county)
+        tooltip = create_enhanced_tooltip(county)
         folium.GeoJson(
-            county['geometry'],
+            county["geometry"],
             style_function=lambda feature: get_inside_county_style(),
             highlight_function=lambda feature: get_inside_hover_style(),
             popup=popup,
-            tooltip=create_enhanced_tooltip(county)
+            tooltip=tooltip,
         ).add_to(map_obj)
-    
+
     # Add partial counties (parts IN district) with enhanced data
     for county in partial_counties:
         popup = create_enhanced_popup(county, is_partial=True)
+        tooltip = create_enhanced_tooltip(county, is_partial=True)
         folium.GeoJson(
-            county['intersection_geometry'],
+            county["intersection_geometry"],
             style_function=lambda feature: get_partial_county_style(),
             highlight_function=lambda feature: get_partial_hover_style(),
             popup=popup,
-            tooltip=create_enhanced_tooltip(county, is_partial=True)
+            tooltip=tooltip,
         ).add_to(map_obj)
-    
-    # Add partial counties (parts OUTSIDE district) - NO INTERACTIVITY
+
+    # Add partial counties (parts OUTSIDE district) - NO POPUP, NO TOOLTIP, NO HOVER
     for area in partial_outside_areas:
         folium.GeoJson(
-            area['geometry'],
+            area["geometry"],
             style_function=lambda feature: get_outside_county_style(),
+            # NO highlight_function - no hover effects
             popup=None,  # No popup for outside areas
-            tooltip=None  # No tooltip for outside areas
+            tooltip=None,  # No tooltip for outside areas
         ).add_to(map_obj)
-    
-    # Add outside counties - NO INTERACTIVITY
+
+    # Add outside counties - NO POPUP, NO TOOLTIP, NO HOVER
     for county in outside_counties:
         folium.GeoJson(
-            county['geometry'],
+            county["geometry"],
             style_function=lambda feature: get_outside_county_style(),
+            # NO highlight_function - no hover effects
             popup=None,  # No popup for outside counties
-            tooltip=None  # No tooltip for outside counties
+            tooltip=None,  # No tooltip for outside counties
         ).add_to(map_obj)
+
 
 def add_hospital_layers(map_obj, district_hospitals):
     """Add hospital markers for district hospitals only"""
-    
+
     # Add district hospitals (prominent red markers)
     for hospital in district_hospitals:
         # Create custom icon for district hospitals
         hospital_icon = folium.DivIcon(
-            html=f'''
+            html=f"""
             <div style="background: #DC2626; width: 20px; height: 20px; border-radius: 50%; 
                         border: 3px solid white; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
                         display: flex; align-items: center; justify-content: center; 
                         color: white; font-size: 10px; font-weight: bold;">
                 H
             </div>
-            ''',
+            """,
             icon_size=(20, 20),
-            icon_anchor=(10, 10)
+            icon_anchor=(10, 10),
         )
-        
+
         # Create popup content
-        services_list = hospital.get('services', [])
+        services_list = hospital.get("services", [])
         services_text = ", ".join(services_list[:5])  # Show first 5 services
         if len(services_list) > 5:
             services_text += f" (and {len(services_list) - 5} more)"
-        
-        popup_html = f'''
+
+        popup_html = f"""
         <div style="font-family: 'Segoe UI', sans-serif; min-width: 300px;">
-            <h4 style="color: #DC2626; margin: 0 0 8px 0;">🏥 {hospital['hospital_name']}</h4>
-            <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Address:</strong> {hospital['address']}</p>
-            <p style="margin: 0 0 8px 0; font-size: 12px; color: #DC2626;"><strong>Risk:</strong> {hospital['risk_description']}</p>
-            <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Beds:</strong> {hospital['beds']}</p>
+            <h4 style="color: #DC2626; margin: 0 0 8px 0;">🏥 {hospital["hospital_name"]}</h4>
+            <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Address:</strong> {hospital["address"]}</p>
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: #DC2626;"><strong>Risk:</strong> {hospital["risk_description"]}</p>
+            <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Beds:</strong> {hospital["beds"]}</p>
             <p style="margin: 0 0 8px 0; font-size: 12px;"><strong>Services:</strong> {services_text}</p>
-            <p style="margin: 0; font-size: 11px; color: #6B7280;">{hospital['additional_info']}</p>
+            <p style="margin: 0; font-size: 11px; color: #6B7280;">{hospital["additional_info"]}</p>
         </div>
-        '''
-        
+        """
+
         folium.Marker(
-            location=[hospital['latitude'], hospital['longitude']],
+            location=[hospital["latitude"], hospital["longitude"]],
             icon=hospital_icon,
             popup=folium.Popup(popup_html, max_width=350),
-            tooltip=folium.Tooltip(f"🏥 {hospital['hospital_name']} - HIGH RISK")
+            tooltip=folium.Tooltip(f"🏥 {hospital['hospital_name']} - HIGH RISK"),
         ).add_to(map_obj)
+
 
 def add_enhanced_controls_and_title(map_obj, district_bounds):
     """Add enhanced controls with real Census data information"""
-    
+
     # Convert bounds for JavaScript
-    min_lat = district_bounds['miny']
-    max_lat = district_bounds['maxy'] 
-    min_lng = district_bounds['minx']
-    max_lng = district_bounds['maxx']
-    
+    min_lat = district_bounds["miny"]
+    max_lat = district_bounds["maxy"]
+    min_lng = district_bounds["minx"]
+    max_lng = district_bounds["maxx"]
+
     # Enhanced HTML with Census data information
-    enhanced_html = f'''
+    enhanced_html = f"""
     <div id="map-controls" style="position: fixed; 
                 top: 20px; left: 20px; width: 400px; height: auto; 
                 background: rgba(255, 255, 255, 0.95);
@@ -888,7 +1036,7 @@ def add_enhanced_controls_and_title(map_obj, district_bounds):
                 </h3>
             </div>
             <p style="margin: 0; color: #6B7280; font-size: 13px; font-weight: 500;">
-                Interactive Map v4.0 • Real Census Data
+                Interactive Map v4.1 • Real Census Data
             </p>
         </div>
         
@@ -934,7 +1082,7 @@ def add_enhanced_controls_and_title(map_obj, district_bounds):
                     <strong>Live US Census Bureau data</strong> from ACS 2022 5-Year Estimates
                 </div>
                 <div style="color: #065F46; font-size: 11px;">
-                    Click counties for population, income, education, health insurance & more
+                    Click counties in district for population, income, education & more
                 </div>
             </div>
         </div>
@@ -973,6 +1121,9 @@ def add_enhanced_controls_and_title(map_obj, district_bounds):
                                 border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center;
                                 color: white; font-size: 8px; font-weight: bold;">H</div>
                     <span style="color: #374151; font-weight: 500;">District Hospitals at Risk</span>
+                </div>
+                <div style="margin-top: 8px; padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 6px;">
+                    <div style="font-size: 11px; color: #1E40AF; font-weight: 600;">Note: Counties outside the district are non-interactive</div>
                 </div>
             </div>
         </div>
@@ -1367,7 +1518,7 @@ def add_enhanced_controls_and_title(map_obj, district_bounds):
             setTimeout(function() {{
                 mapInstance = findMapInstance();
                 if (mapInstance) {{
-                    console.log('Enhanced map v4.0 with real Census data loaded successfully');
+                    console.log('Enhanced map v4.1 with real Census data loaded successfully');
                     
                     var style = document.createElement('style');
                     style.textContent = `
@@ -1394,112 +1545,137 @@ def add_enhanced_controls_and_title(map_obj, district_bounds):
             }});
         }});
     </script>
-    '''
-    
+    """
+
     map_obj.get_root().html.add_child(folium.Element(enhanced_html))
 
+
 def main():
-    """Main function to generate the Kentucky 6th District map v4.0 with real US Census data"""
-    
+    """Main function to generate the Kentucky 6th District map v4.1 with real US Census data"""
+
     try:
-        print("Kentucky 6th Congressional District Map Generator v4.0")
+        print("Kentucky 6th Congressional District Map Generator v4.1")
         print("=" * 70)
-        print("PHASE 4.0: Real US Census Bureau Data Integration + UI Enhancements")
+        print("PHASE 4.1: Real US Census Bureau Data Integration + Enhanced UI")
         print("=" * 70)
-        
+
         # Load shapefiles
         district_gdf, counties_gdf = load_shapefiles()
-        
+
         # Load hospital data (6 district hospitals only)
         district_hospitals = get_hospital_data()
-        
+
         # Identify district counties with real Census demographic data
-        full_counties, partial_counties, outside_counties, partial_outside_areas = identify_district_counties(district_gdf, counties_gdf)
-        
+        full_counties, partial_counties, outside_counties, partial_outside_areas = (
+            identify_district_counties(district_gdf, counties_gdf)
+        )
+
         # Create base map with ONLY OpenStreetMap
         map_obj, bounds = create_base_map(district_gdf)
-        
+
         # Add enhanced district boundary
         add_enhanced_district_boundary(map_obj, district_gdf)
-        
+
         # Add enhanced county layers with real Census data
-        add_enhanced_county_layers(map_obj, full_counties, partial_counties, outside_counties, partial_outside_areas)
-        
+        add_enhanced_county_layers(
+            map_obj,
+            full_counties,
+            partial_counties,
+            outside_counties,
+            partial_outside_areas,
+        )
+
         # Add hospital layers (district hospitals only)
         add_hospital_layers(map_obj, district_hospitals)
-        
+
         # Add enhanced controls with Census data information
         add_enhanced_controls_and_title(map_obj, bounds)
-        
+
         # Fit map to district bounds with optimal padding
-        map_obj.fit_bounds([
-            [bounds['miny'], bounds['minx']], 
-            [bounds['maxy'], bounds['maxx']]
-        ], padding=[15, 15])
-        
+        map_obj.fit_bounds(
+            [[bounds["miny"], bounds["minx"]], [bounds["maxy"], bounds["maxx"]]],
+            padding=[15, 15],
+        )
+
         # Save the Census-enhanced map
-        output_file = 'kentucky_6th_district_map_v4_0.html'
+        output_file = "kentucky_6th_district_map_v4_1.html"
         map_obj.save(output_file)
-        
-        print(f"\n✅ Census-enhanced map v4.0 generated successfully: {output_file}")
-        print(f"\n📊 PHASE 4.0 CENSUS DATA FEATURES:")
+
+        print(f"\n✅ Census-enhanced map v4.1 generated successfully: {output_file}")
+        print(f"\n📊 PHASE 4.1 CENSUS DATA FEATURES:")
         print(f"   🔴 Real US Census Bureau data from ACS 2022 5-Year Estimates")
-        print(f"   📋 Enhanced demographics: Population, income, home values, education")
+        print(
+            f"   📋 Enhanced demographics: Population, income, home values, education"
+        )
         print(f"   🏥 Health metrics: Uninsured rates by county")
         print(f"   🚗 Commute data: Long commute percentages (60+ minutes)")
         print(f"   🏠 Housing: Homeownership rates")
         print(f"   📱 API integration with fallback for reliability")
-        
-        print(f"\n🆕 VERSION 4.0 UI IMPROVEMENTS:")
+
+        print(f"\n🆕 VERSION 4.1 UI IMPROVEMENTS:")
         print(f"   ✅ Removed popups from all geography outside the district")
-        print(f"   ✅ Removed tooltips and hover effects from outside counties")
+        print(f"   ✅ Removed tooltips from all geography outside the district")
+        print(f"   ✅ Removed hover effects from all geography outside the district")
+        print(f"   ✅ Counties outside district are completely non-interactive")
         print(f"   ✅ Eliminated zoom effect when searching addresses")
         print(f"   ✅ Address search now uses panTo() instead of setView() with zoom")
-        print(f"   ✅ Outside counties are completely non-interactive")
-        print(f"   ✅ Cleaner user experience for address verification")
-        
+        print(f"   ✅ Mobile-responsive design maintained across all changes")
+        print(f"   ✅ Added legend note about non-interactive outside counties")
+
         print(f"\n🏥 DISTRICT HOSPITALS AT RISK ({len(district_hospitals)}):")
         for hospital in district_hospitals:
             print(f"   • {hospital['hospital_name']} - {hospital['beds']} beds")
-        
+
         print(f"\n📊 ENHANCED DISTRICT COMPOSITION:")
-        print(f"   🔵 IN DISTRICT - Full counties ({len(full_counties)}): {', '.join([c['name'] for c in full_counties])}")
-        print(f"   🟡 IN DISTRICT - Partial counties ({len(partial_counties)}): {', '.join([c['name'] + ' (' + str(round(c['overlap_percentage'], 1)) + '%)' for c in partial_counties])}")
-        print(f"   ⚪ OUTSIDE DISTRICT - Extended coverage: {len(outside_counties)} counties (no popups)")
-        
-        print(f"\n🚀 V4.0 COMPREHENSIVE FEATURES:")
+        print(
+            f"   🔵 IN DISTRICT - Full counties ({len(full_counties)}): {', '.join([c['name'] for c in full_counties])}"
+        )
+        print(
+            f"   🟡 IN DISTRICT - Partial counties ({len(partial_counties)}): {', '.join([c['name'] + ' (' + str(round(c['overlap_percentage'], 1)) + '%)' for c in partial_counties])}"
+        )
+        print(
+            f"   ⚪ OUTSIDE DISTRICT - Extended coverage: {len(outside_counties)} counties (non-interactive)"
+        )
+
+        print(f"\n🚀 V4.1 COMPREHENSIVE FEATURES:")
         print(f"   ✅ Live US Census Bureau API integration")
         print(f"   ✅ ACS 2022 5-Year Estimates (most recent available)")
         print(f"   ✅ 8 key demographic indicators per county")
-        print(f"   ✅ Enhanced county popups with real data")
+        print(f"   ✅ Enhanced county popups with real data (district counties only)")
         print(f"   ✅ Data source attribution and vintage information")
         print(f"   ✅ Fallback system for API reliability")
         print(f"   ✅ Color-coded health and commute metrics")
         print(f"   ✅ Professional UI with address search")
         print(f"   ✅ Mobile-responsive design")
         print(f"   ✅ Hospital closure risk visualization")
-        
+        print(f"   ✅ Non-interactive outside counties (static visual only)")
+
         print(f"\n📈 DEMOGRAPHIC DATA INCLUDES:")
         print(f"   • Total Population")
-        print(f"   • Median Household Income") 
+        print(f"   • Median Household Income")
         print(f"   • Median Home Value")
         print(f"   • Bachelor's Degree Rate")
         print(f"   • Homeownership Rate")
         print(f"   • Long Commute Rate (60+ minutes)")
         print(f"   • Uninsured Rate")
         print(f"   • Population Growth Estimates")
-        
-        print(f"\n🎯 READY FOR DEPLOYMENT - Complete Production Map v4.0!")
-        
+
+        print(f"\n🎯 READY FOR DEPLOYMENT - Complete Production Map v4.1!")
+        print(
+            f"\n🔧 ISSUE RESOLVED: Counties outside district (like Morgan County) are now"
+        )
+        print(f"   completely non-interactive - no hover effects, tooltips, or popups.")
+
         return map_obj
-        
+
     except Exception as e:
-        print(f"❌ Error generating Census-enhanced map v4.0: {e}")
+        print(f"❌ Error generating Census-enhanced map v4.1: {e}")
         import traceback
+
         traceback.print_exc()
         return None
+
 
 if __name__ == "__main__":
     # Generate the Census-enhanced map
     result = main()
-            #map-controls {{
